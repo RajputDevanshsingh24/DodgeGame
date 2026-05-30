@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dodge Blocks Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  margin:0;
+  background:#0f1226;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  color:white;
+  font-family:system-ui;
+}
+canvas{
+  background:#11153a;
+  border:2px solid #3a3f7a;
+  border-radius:8px;
+}
+#ui{
+  position:absolute;
+  top:10px;
+  display:flex;
+  gap:15px;
+  font-weight:bold;
+}
+button{
+  padding:8px 14px;
+  background:#1b1f49;
+  color:white;
+  border:1px solid #3a3f7a;
+  border-radius:6px;
+  cursor:pointer;
+}
+#startScreen{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,0.85);
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+}
+.touch{
+  position:absolute;
+  bottom:20px;
+  display:flex;
+  gap:20px;
+}
+.touch button{
+  width:60px;
+  height:60px;
+  font-size:22px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+  <div>Score: <span id="score">0</span></div>
+  <div>Shield: <span id="shield">OFF</span></div>
+</div>
+
+<div id="startScreen">
+  <h1>DODGE BLOCKS</h1>
+  <p>Use ⬅ ➡ Arrow Keys</p>
+  <button id="startBtn">START GAME</button>
+</div>
+
+<canvas id="game" width="400" height="600"></canvas>
+
+<div class="touch">
+  <button ontouchstart="keys.left=true" ontouchend="keys.left=false">⬅</button>
+  <button ontouchstart="keys.right=true" ontouchend="keys.right=false">➡</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const shieldEl = document.getElementById("shield");
+const startScreen = document.getElementById("startScreen");
+const startBtn = document.getElementById("startBtn");
+
+/* 🎵 MUSIC (browser-safe) */
+const startMusic = new Audio("start.mp3");
+const playMusic = new Audio("play.mp3");
+const gameOverMusic = new Audio("gameover.mp3");
+
+startMusic.loop = true;
+playMusic.loop = true;
+gameOverMusic.loop = false;
+
+startMusic.volume = 0.5;
+playMusic.volume = 0.5;
+gameOverMusic.volume = 0.7;
+
+/* game variables */
+let player, blocks, score, shield, running;
+let keys = { left:false, right:false };
+
+function reset(){
+  player = { x:180, y:520, w:40, h:40 };
+  blocks = [];
+  score = 0;
+  shield = false;
+  running = true;
+  scoreEl.textContent = 0;
+  shieldEl.textContent = "OFF";
+}
+
+/* START GAME (user click = music allowed) */
+startBtn.addEventListener("click", ()=>{
+  startMusic.pause();
+  startMusic.currentTime = 0;
+
+  playMusic.currentTime = 0;
+  playMusic.play();        // ✅ guaranteed play
+
+  startScreen.style.display = "none";
+  reset();
+  loop();
+});
+
+/* background start screen music (after FIRST click anywhere) */
+document.body.addEventListener("click", ()=>{
+  if(startScreen.style.display !== "none"){
+    startMusic.play();
+  }
+},{ once:true });
+
+function spawnBlock(){
+  let size = 30 + Math.random()*30;
+  blocks.push({
+    x: Math.random()*(canvas.width-size),
+    y: -size,
+    w: size,
+    h: size,
+    v: 1.2 + Math.random()*0.8   // slow speed
+  });
+}
+
+function spawnShield(){
+  blocks.push({
+    x: Math.random()*350,
+    y: -20,
+    w: 20,
+    h: 20,
+    v: 1.5,
+    type: "shield"
+  });
+}
+
+function loop(){
+  if(!running) return;
+
+  ctx.clearRect(0,0,400,600);
+
+  score++;
+  scoreEl.textContent = score;
+  shieldEl.textContent = shield ? "ON" : "OFF";
+
+  if(Math.random()<0.03) spawnBlock();
+  if(Math.random()<0.005) spawnShield();
+
+  if(keys.left) player.x -= 5;
+  if(keys.right) player.x += 5;
+  player.x = Math.max(0, Math.min(360, player.x));
+
+  ctx.fillStyle = shield ? "#66ffcc" : "#4aa3ff";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+
+  for(let i=blocks.length-1;i>=0;i--){
+    let b = blocks[i];
+    b.y += b.v;
+
+    if(b.type === "shield"){
+      ctx.fillStyle = "gold";
+      ctx.fillRect(b.x,b.y,b.w,b.h);
+      if(hit(player,b)){
+        shield = true;
+        blocks.splice(i,1);
+      }
+    }else{
+      ctx.fillStyle = "red";
+      ctx.fillRect(b.x,b.y,b.w,b.h);
+      if(hit(player,b)){
+        if(shield){
+          shield = false;
+          blocks.splice(i,1);
+        }else{
+          gameOver();
+        }
+      }
+    }
+
+    if(b.y > 620) blocks.splice(i,1);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function hit(a,b){
+  return a.x < b.x+b.w &&
+         a.x+a.w > b.x &&
+         a.y < b.y+b.h &&
+         a.y+a.h > b.y;
+}
+
+function gameOver(){
+  running = false;
+
+  playMusic.pause();
+  playMusic.currentTime = 0;
+
+  gameOverMusic.currentTime = 0;
+  gameOverMusic.play();
+
+  startScreen.style.display = "flex";
+  startScreen.innerHTML =
+    "<h1>GAME OVER</h1>" +
+    "<p>Score: "+score+"</p>" +
+    "<button onclick='location.reload()'>RESTART</button>";
+}
+
+/* keyboard controls */
+window.addEventListener("keydown",e=>{
+  if(e.key==="ArrowLeft") keys.left = true;
+  if(e.key==="ArrowRight") keys.right = true;
+});
+window.addEventListener("keyup",e=>{
+  if(e.key==="ArrowLeft") keys.left = false;
+  if(e.key==="ArrowRight") keys.right = false;
+});
+</script>
+
+</body>
+</html>
